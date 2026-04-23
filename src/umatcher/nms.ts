@@ -1,6 +1,6 @@
 /**
- * Non-maximum suppression, matching the behaviour of
- * `cv2.dnn.NMSBoxes` as used by UMatcher's Python detector.
+ * Non-maximum suppression, matching the behaviour of OpenCV's NMSBoxes as
+ * used by UMatcher's reference detector.
  */
 
 import type { Bbox } from "./types.js";

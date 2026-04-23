@@ -103,7 +103,7 @@ export class UMatcher {
     const outputs = model.run({ template_img: input });
     const emb = firstOutput(outputs);
     const data = await emb.data();
-    // L2 normalise to match the Python detector's behaviour.
+    // L2 normalise to match the reference detector's behaviour.
     return l2Normalize(new Float32Array(data.buffer, data.byteOffset, embeddingDim));
   }
 

@@ -6,9 +6,3 @@ dist-demo
 .env.local
 .DS_Store
 *.tgz
-.umatcher_src
-
-# Model weights
-public/models/*.onnx
-public/models/*.safetensors
-!public/models/.gitkeep

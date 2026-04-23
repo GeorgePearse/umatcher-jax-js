@@ -1,6 +1,7 @@
 /**
  * UDetector - pyramid sliding-window detection built on top of UMatcher.
- * Port of `lib/detector/udetector.py` with identical semantics.
+ * TypeScript port of the UMatcher reference detector, preserving identical
+ * semantics (center-cropped template, pyramid scales, NMS, thresholds).
  */
 
 import type { Bbox, PyramidScales } from "./types.js";
@@ -17,7 +18,7 @@ export interface DetectOptions {
   threshold?: number;
   pyramid?: PyramidScales;
   overlap?: number;
-  /** IoU threshold for NMS. Defaults to 0.5 (matches the Python code). */
+  /** IoU threshold for NMS. Defaults to 0.5 (matches the reference code). */
   nmsIou?: number;
 }
 
@@ -43,9 +44,9 @@ export class UDetector {
    * Set the template from a source image + bbox around the object.
    *
    * `bbox` is [x1, y1, x2, y2] in pixels of the source image. This mirrors
-   * the Python `set_template()`: it center-crops a square region around the
-   * bbox (scaled by templateScale), resizes it to templateSize, runs the
-   * template branch, and stores the L2-normalised embedding.
+   * the reference `set_template`: center-crop a square region around the
+   * bbox (scaled by templateScale), resize it to templateSize, run the
+   * template branch, and store the L2-normalised embedding.
    */
   async setTemplate(image: ImageData, bbox: Bbox): Promise<void> {
     const { templateSize, templateScale } = this.matcher.cfg;
@@ -59,7 +60,7 @@ export class UDetector {
 
   /**
    * Run detection on a full-resolution image using the pyramid sliding-window
-   * scheme from the Python reference.
+   * scheme from the reference implementation.
    */
   async detect(
     image: ImageData,
@@ -84,7 +85,7 @@ export class UDetector {
       let scaledW = Math.round(originalW * scale);
       let scaledH = Math.round(originalH * scale);
 
-      // Skip when image shrinks below a single window in both dims, matching Python.
+      // Skip when image shrinks below a single window in both dims.
       if (scaledW < searchSize && scaledH < searchSize) continue;
 
       let scaled = resize(image, scaledW, scaledH);

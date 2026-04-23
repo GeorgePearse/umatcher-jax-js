@@ -1,11 +1,11 @@
 /**
- * UTracker - single-object tracker, port of `lib/tracker/utracker.py`.
+ * UTracker - single-object tracker, TypeScript port of the UMatcher
+ * reference tracker.
  *
- * The Python reference adds an 8-state Kalman filter (x, y, w, h + velocities)
- * on top of the search heatmap. We include a pluggable "post-processor" to
- * keep that door open, but default to pure-score tracking which works well
- * for most in-browser demos and matches UMatcher's published behaviour on
- * the provided example video.
+ * The reference implementation adds an 8-state Kalman filter
+ * (x, y, w, h + velocities) on top of the search heatmap. We default to
+ * pure-score tracking which works well for most in-browser demos and
+ * matches UMatcher's published behaviour on the provided example video.
  */
 
 import type { Bbox, CxCyWh } from "./types.js";
@@ -48,7 +48,7 @@ export class UTracker {
     if (!this.templateEmbedding) {
       this.templateEmbedding = newEmb;
     } else {
-      // Running average, re-normalised (mirrors the Python logic).
+      // Running average, re-normalised (mirrors the reference logic).
       const combined = new Float32Array(newEmb.length);
       for (let i = 0; i < combined.length; i++) {
         combined[i] = this.templateEmbedding[i] + newEmb[i];

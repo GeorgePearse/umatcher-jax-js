@@ -1,8 +1,8 @@
 /**
- * Built-in samples that mirror the upstream UMatcher Python demos
- * (`scripts/detection_example.py`, `scripts/tracking_example.py`).
+ * Built-in samples that mirror the upstream UMatcher reference demos.
  *
- * The ROIs and image paths come directly from the upstream defaults.
+ * The ROIs and image paths come directly from the upstream defaults so the
+ * output is numerically comparable to the reference implementation.
  */
 
 import type { Bbox, CxCyWh } from "@umatcher";
@@ -38,7 +38,7 @@ function cxcywhToXyxy(cx: number, cy: number, w: number, h: number): Bbox {
   return [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
 }
 
-// Corresponds to scripts/detection_example.py default: ROI [110, 233, 52, 99] on test_1.png.
+// Upstream default detection ROI [110, 233, 52, 99] (cxcywh) on test_1.png.
 const TEST_1_ROI = cxcywhToXyxy(110, 233, 52, 99);
 
 export const DETECTION_SAMPLES: DetectionSample[] = [
@@ -46,7 +46,7 @@ export const DETECTION_SAMPLES: DetectionSample[] = [
     id: "test-1",
     label: "Test 1 (upstream default)",
     description:
-      "Matches `scripts/detection_example.py --template_img test_1.png --search_img test_1.png`. Self-match with the preset ROI baked in.",
+      "Self-match on test_1.png using the upstream default ROI (cxcywh [110, 233, 52, 99]).",
     referenceUrl: "/samples/test_1.png",
     defaultBbox: TEST_1_ROI,
     searchUrl: "/samples/test_1.png",
@@ -90,7 +90,7 @@ export const TRACKER_SAMPLES: TrackerSample[] = [
     id: "girl-dance",
     label: "Girl dance (upstream default)",
     description:
-      "Matches `scripts/tracking_example.py --input_path girl_dance.mp4 --init_roi 547 188 43 57`.",
+      "Single-object tracking on girl_dance.mp4 with the upstream init ROI (cxcywh [547, 188, 43, 57]).",
     videoUrl: "/samples/girl_dance.mp4",
     initRoi: [547, 188, 43, 57],
   },

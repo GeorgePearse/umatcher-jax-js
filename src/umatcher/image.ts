@@ -1,9 +1,9 @@
 /**
  * Image utilities - all pure JS/Canvas, no server required.
  *
- * These mirror the few helpers from `lib/utils/imgproc.py` that we need for
- * running inference (center_crop, resize) plus a convenience for converting
- * from HTMLImageElement / HTMLVideoElement / Canvas to tensor-ready Float32.
+ * These mirror the few image helpers we need for running inference
+ * (center_crop, resize) plus a convenience for converting from
+ * HTMLImageElement / HTMLVideoElement / Canvas to tensor-ready Float32.
  */
 
 import type { Bbox } from "./types.js";
@@ -28,11 +28,9 @@ export function imageDataFromImage(
 /**
  * Convert an ImageData into a CHW Float32Array normalised to [0, 1].
  *
- * This exactly mirrors the preprocessing in Python:
- *     img = img.astype(np.float32).transpose(2, 0, 1) / 255.0
- *
- * The UMatcher model expects RGB input. ImageData is RGBA so the alpha channel
- * is dropped.
+ * Layout matches the reference preprocessing: transpose HWC -> CHW and scale
+ * by 1/255. The UMatcher model expects RGB input; since ImageData is RGBA
+ * the alpha channel is dropped.
  */
 export function imageDataToTensor(img: ImageData): Float32Array {
   const { data, width, height } = img;
@@ -47,7 +45,7 @@ export function imageDataToTensor(img: ImageData): Float32Array {
 }
 
 /**
- * Center-crop a region around a bbox, mirroring `lib/utils/imgproc.py::center_crop`.
+ * Center-crop a region around a bbox, mirroring the reference `center_crop`.
  *
  * The bbox is in [x1, y1, x2, y2] form. The crop is a square whose side length
  * equals `max(w, h) * scale`, centered on the bbox center. Regions outside the

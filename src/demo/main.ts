@@ -3,7 +3,8 @@
  *
  * Two tabs: Detection (static reference + search images) and Tracking
  * (video playback with UTracker). Both are preloaded with the exact same
- * sample images/videos the upstream Python demos use.
+ * sample images/videos the upstream UMatcher reference implementation
+ * uses, with default ROIs that match its defaults.
  */
 
 import {
