@@ -16,65 +16,131 @@
       <p id="backend-line" class="backend">Initialising jax-js...</p>
     </header>
 
-    <main>
-      <section class="panel">
-        <h2>1. Reference image + template box</h2>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="detection" type="button">Detection</button>
+      <button class="tab" data-tab="tracking" type="button">Tracking</button>
+    </nav>
+
+    <!-- =================== DETECTION =================== -->
+    <section id="detection-view" class="view active">
+      <section class="preset-bar">
+        <h3>Upstream samples</h3>
         <p class="help">
-          Drop or choose an image, then drag on it to select the object you
-          want to match.
+          Load one of the reference images used by
+          <code>scripts/detection_example.py</code> from the original UMatcher
+          repo. Default template ROIs match the upstream defaults so results
+          are directly comparable.
         </p>
-        <div class="dropzone" id="refDrop">
-          <input type="file" id="refFile" accept="image/*" hidden />
-          <span>Drop reference image or click to choose</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="refCanvas"></canvas>
-        </div>
-        <div class="template-preview">
-          <span>Template crop:</span>
-          <canvas id="templateCanvas" width="128" height="128"></canvas>
-          <button id="setTemplateBtn" disabled>Set template</button>
-        </div>
+        <div class="preset-grid" id="detectionPresets"></div>
       </section>
 
-      <section class="panel">
-        <h2>2. Search image</h2>
+      <main class="split">
+        <section class="panel">
+          <h2>1. Reference image + template box</h2>
+          <p class="help">
+            Drop or choose an image, then drag on it to select the object you
+            want to match.
+          </p>
+          <div class="dropzone" id="refDrop">
+            <input type="file" id="refFile" accept="image/*" hidden />
+            <span>Drop reference image or click to choose</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="refCanvas"></canvas>
+          </div>
+          <div class="template-preview">
+            <span>Template crop:</span>
+            <canvas id="templateCanvas" width="128" height="128"></canvas>
+            <button id="setTemplateBtn" disabled>Set template</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>2. Search image</h2>
+          <p class="help">
+            Drop or choose the scene you want to search in, then hit Detect.
+          </p>
+          <div class="dropzone" id="searchDrop">
+            <input type="file" id="searchFile" accept="image/*" hidden />
+            <span>Drop search image or click to choose</span>
+          </div>
+          <div class="controls">
+            <label>
+              Threshold
+              <input
+                id="threshold"
+                type="range"
+                min="0.05"
+                max="0.95"
+                step="0.01"
+                value="0.3"
+              />
+              <span id="thresholdValue">0.30</span>
+            </label>
+            <label>
+              Pyramid
+              <select id="pyramid">
+                <option value="1.0">single-scale (1.0)</option>
+                <option value="0.7,1.0,1.3" selected>3 levels (0.7 / 1.0 / 1.3)</option>
+                <option value="0.5,0.7,1.0,1.3,1.7">5 levels</option>
+              </select>
+            </label>
+            <button id="detectBtn" disabled>Detect</button>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="searchCanvas"></canvas>
+          </div>
+          <p id="status"></p>
+        </section>
+      </main>
+    </section>
+
+    <!-- =================== TRACKING =================== -->
+    <section id="tracking-view" class="view">
+      <section class="preset-bar">
+        <h3>Upstream tracking samples</h3>
         <p class="help">
-          Drop or choose the scene you want to search in, then hit Detect.
+          Load one of the videos used by
+          <code>scripts/tracking_example.py</code>. The preset ROI on the
+          first frame matches the upstream default so the tracked target is
+          identical.
         </p>
-        <div class="dropzone" id="searchDrop">
-          <input type="file" id="searchFile" accept="image/*" hidden />
-          <span>Drop search image or click to choose</span>
-        </div>
-        <div class="controls">
-          <label>
-            Threshold
-            <input
-              id="threshold"
-              type="range"
-              min="0.05"
-              max="0.95"
-              step="0.01"
-              value="0.5"
-            />
-            <span id="thresholdValue">0.50</span>
-          </label>
-          <label>
-            Pyramid
-            <select id="pyramid">
-              <option value="1.0">single-scale (1.0)</option>
-              <option value="0.7,1.0,1.3" selected>3 levels (0.7 / 1.0 / 1.3)</option>
-              <option value="0.5,0.7,1.0,1.3,1.7">5 levels</option>
-            </select>
-          </label>
-          <button id="detectBtn" disabled>Detect</button>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="searchCanvas"></canvas>
-        </div>
-        <p id="status"></p>
+        <div class="preset-grid" id="trackerPresets"></div>
       </section>
-    </main>
+
+      <main>
+        <section class="panel">
+          <h2>Single-object tracking</h2>
+          <p class="help">
+            Drop a video (or pick a preset). Draw a box on the first frame,
+            hit <strong>Init tracker</strong>, then <strong>Play</strong> to
+            follow the object frame-by-frame.
+          </p>
+          <div class="dropzone" id="videoDrop">
+            <input type="file" id="videoFile" accept="video/*" hidden />
+            <span>Drop video or click to choose</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="trackerCanvas"></canvas>
+            <video id="trackerVideo" muted playsinline preload="auto" hidden></video>
+          </div>
+          <div class="controls">
+            <button id="initTrackerBtn" disabled>Init tracker</button>
+            <button id="playTrackerBtn" disabled>Play</button>
+            <button id="stopTrackerBtn" disabled>Stop</button>
+            <label>
+              FPS cap
+              <select id="trackerFpsCap">
+                <option value="0">unlimited</option>
+                <option value="15" selected>15</option>
+                <option value="30">30</option>
+              </select>
+            </label>
+          </div>
+          <p id="trackerStatus"></p>
+        </section>
+      </main>
+    </section>
 
     <footer>
       <p>

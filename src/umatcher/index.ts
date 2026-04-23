@@ -16,4 +16,4 @@ export {
   drawBoxes,
 } from "./image.js";
 export { nms, iou } from "./nms.js";
-export type { UMatcherConfig, Bbox, PyramidScales, Rgb } from "./types.js";
+export type { UMatcherConfig, Bbox, CxCyWh, PyramidScales, Rgb } from "./types.js";

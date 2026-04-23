@@ -43,6 +43,19 @@ pnpm install         # or npm install / yarn
 pnpm run dev         # starts the Vite demo on http://localhost:5173
 ```
 
+The demo ships with the same sample images and video used by the upstream
+Python demos:
+
+- `test_1.png` / `test_2.png` / `test_3.png` / `test_4.png` (detection)
+- `template_3.png` (one-shot detection)
+- `girl_dance.mp4` (single-object tracking)
+
+They live under `public/samples/` and are exposed as one-click presets at
+the top of each demo tab (Detection / Tracking). The preset ROIs match the
+upstream defaults exactly (e.g. `[110, 233, 52, 99]` for `test_1.png`,
+`[547, 188, 43, 57]` for `girl_dance.mp4`) so results are directly
+comparable to the Python reference implementation.
+
 Before the demo can do anything useful you need to export the ONNX weights:
 
 ```bash
