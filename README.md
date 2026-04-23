@@ -23,7 +23,8 @@ src/
     image.ts       # center_crop / resize / tensor helpers
     nms.ts         # Greedy NMS
     types.ts       # Shared types and defaults
-    onnx-loader.ts # Dynamic @jax-js/onnx loader (via esm.sh)
+    vendor/        # Vendored @jax-js/onnx bundle (not yet on npm)
+    jax-onnx.d.ts  # Local type stubs for @jax-js/onnx
     index.ts       # Public API
   demo/            # Vite static site
     main.ts
@@ -97,23 +98,39 @@ only reimplement the pre/post processing in TypeScript.
 
 ## Runtime dependencies
 
-- [`@jax-js/jax`](https://www.npmjs.com/package/@jax-js/jax) - pulled from
-  npm as a standard dependency.
-- `@jax-js/onnx` - not yet published to npm, so we load the pre-built ESM
-  bundle from esm.sh at runtime. Override with
-  `globalThis.__UMATCHER_ONNX_URL__` before importing UMatcher if you need
-  to pin a specific commit or vendor the bundle locally.
+- [`@jax-js/jax`](https://www.npmjs.com/package/@jax-js/jax),
+  [`@bufbuild/protobuf`](https://www.npmjs.com/package/@bufbuild/protobuf),
+  [`onnx-buf`](https://www.npmjs.com/package/onnx-buf) - all regular npm
+  dependencies.
+- `@jax-js/onnx` - not yet published to npm. We ship a pinned copy of the
+  upstream ESM bundle at `src/umatcher/vendor/jax-onnx.mjs` with its
+  esm.sh-relative imports rewritten to the npm specifiers above. The
+  Vite plugin in `vite.config.ts` aliases `@jax-js/onnx` to this file so
+  both it and the rest of the app share a single `@jax-js/jax` instance.
 
 ## Backend selection
 
 jax-js auto-picks the fastest available device. To force a backend, pass
-`device: "webgpu"` (or `"wasm"` / `"webgl"`) to `buildUMatcher`.
+`device: "webgpu"` (or `"webgl"` / `"wasm"` / `"cpu"`) to `buildUMatcher`,
+or, in the demo, append `?device=webgpu` to the URL.
 
 ## Browser support
 
-Anywhere jax-js works - Chrome/Edge, Firefox, Safari, iOS 26+, Chrome for
-Android, and Deno. WebGPU gives the best performance; the Wasm fallback
-works everywhere.
+The UMatcher ONNX models use fp16 intermediates internally, which today
+means you need a browser/backend that supports fp16 ops:
+
+- **Recommended:** Chrome or Edge on Windows / macOS / Linux with a recent
+  GPU and native WebGPU enabled. jax-js will pick the `webgpu` backend and
+  everything just works.
+- **Wasm / WebGL / CPU:** jax-js works there for most models, but its
+  wasm and webgl backends don't yet implement all fp16 ops this model
+  needs (`GlobalIndex<float16>` / `Unsupported dtype for WebGL: float16`).
+  Headless Linux CI without a real GPU therefore can't run full inference,
+  only the UI wiring.
+
+If your target is mobile browsers or GPUs without `shader-f16` support, we
+recommend re-exporting UMatcher from the upstream repo in full fp32 and
+pointing `templateBranchUrl` / `searchBranchUrl` at those weights.
 
 ## Licence
 

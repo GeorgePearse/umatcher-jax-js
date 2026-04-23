@@ -1,10 +1,28 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { resolve } from "node:path";
 
-// The demo lives in src/demo and shares the library code in src/umatcher.
+/**
+ * Resolve `@jax-js/onnx` to our vendored bundle so it shares a single
+ * `@jax-js/jax` instance (from node_modules) with the rest of the app.
+ * The vendored file is a minor rewrite of the upstream esm.sh bundle with
+ * its esm.sh-relative imports swapped for bare npm specifiers.
+ */
+function jaxOnnxVendor(): Plugin {
+  const vendored = resolve(__dirname, "src/umatcher/vendor/jax-onnx.mjs");
+  return {
+    name: "jax-onnx-vendor",
+    enforce: "pre",
+    resolveId(id) {
+      if (id === "@jax-js/onnx") return vendored;
+      return null;
+    },
+  };
+}
+
 export default defineConfig({
   root: "src/demo",
   publicDir: resolve(__dirname, "public"),
+  plugins: [jaxOnnxVendor()],
   resolve: {
     alias: {
       "@umatcher": resolve(__dirname, "src/umatcher"),
@@ -12,21 +30,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Cross-origin isolation enables SharedArrayBuffer (required for multi-threaded Wasm in jax-js).
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-    },
     fs: {
       allow: [resolve(__dirname)],
     },
   },
   preview: {
     port: 4173,
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-    },
   },
   build: {
     outDir: resolve(__dirname, "dist-demo"),

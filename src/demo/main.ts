@@ -33,9 +33,21 @@ const state: DetectionState = { refImage: null, searchImage: null, bbox: null };
 
 // Model URLs are relative to the dev server's public root.
 const MODEL_BASE = "/models";
+// Override the backend via ?device=webgl / wasm / webgpu / cpu query param
+// (useful for testing on hardware that doesn't expose WebGPU).
+const deviceParam = new URLSearchParams(location.search).get("device");
+const device = (
+  deviceParam === "webgpu" ||
+  deviceParam === "webgl" ||
+  deviceParam === "wasm" ||
+  deviceParam === "cpu"
+    ? deviceParam
+    : undefined
+) as "webgpu" | "webgl" | "wasm" | "cpu" | undefined;
 const matcher = buildUMatcher({
   templateBranchUrl: `${MODEL_BASE}/template_branch.onnx`,
   searchBranchUrl: `${MODEL_BASE}/search_branch.onnx`,
+  device,
 });
 
 const detector = new UDetector(matcher);

@@ -34,7 +34,9 @@
   "author": "GeorgePearse",
   "license": "MIT",
   "dependencies": {
-    "@jax-js/jax": "^0.1.11"
+    "@bufbuild/protobuf": "^2.12.0",
+    "@jax-js/jax": "^0.1.11",
+    "onnx-buf": "^1.20.0-1"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",

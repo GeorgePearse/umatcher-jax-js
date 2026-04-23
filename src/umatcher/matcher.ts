@@ -8,10 +8,10 @@
 
 import { numpy as np, defaultDevice, init as initJax } from "@jax-js/jax";
 import type { Array as JArray } from "@jax-js/jax";
+import { ONNXModel } from "@jax-js/onnx";
 
 import type { UMatcherConfig } from "./types.js";
 import { DEFAULT_CONFIG } from "./types.js";
-import { loadOnnxModel, type IOnnxModel } from "./onnx-loader.js";
 
 export interface SearchOutputs {
   /** Score map, shape [1, 1, feat_sz, feat_sz]. Values in [0, 1]. */
@@ -27,19 +27,33 @@ export interface SearchOutputs {
 let jaxInitialized: Promise<void> | null = null;
 
 /**
- * Kick off WebGPU/Wasm initialization and pick the best available device.
+ * Kick off jax-js device initialization and pick the best available backend.
  * Safe to call multiple times - returns the same promise.
+ *
+ * Device preference order when none is explicitly requested:
+ *   1. `webgpu`  - fastest and supports all ops we need.
+ *   2. `webgl`   - broad op coverage (including fp16 intermediates).
+ *   3. `wasm`    - last resort; jax-js's wasm backend has limited ops so
+ *                  some large models may fail with "not supported in wasm"
+ *                  errors.
  */
 function ensureJaxInit(preferred?: UMatcherConfig["device"]): Promise<void> {
   if (jaxInitialized) return jaxInitialized;
   jaxInitialized = (async () => {
     const devices = await initJax();
+    // eslint-disable-next-line no-console
+    console.log("[UMatcher] jax-js available devices:", devices);
     if (preferred && devices.includes(preferred)) {
       defaultDevice(preferred);
-    } else if (devices.includes("webgpu")) {
-      defaultDevice("webgpu");
-    } else {
-      defaultDevice("wasm");
+      return;
+    }
+    for (const candidate of ["webgpu", "webgl", "wasm"] as const) {
+      if (devices.includes(candidate)) {
+        // eslint-disable-next-line no-console
+        console.log("[UMatcher] using backend:", candidate);
+        defaultDevice(candidate);
+        return;
+      }
     }
   })();
   return jaxInitialized;
@@ -47,8 +61,8 @@ function ensureJaxInit(preferred?: UMatcherConfig["device"]): Promise<void> {
 
 export class UMatcher {
   readonly cfg: UMatcherConfig;
-  private templateModel: IOnnxModel | null = null;
-  private searchModel: IOnnxModel | null = null;
+  private templateModel: ONNXModel | null = null;
+  private searchModel: ONNXModel | null = null;
 
   constructor(cfg: UMatcherConfig) {
     this.cfg = cfg;
@@ -61,18 +75,15 @@ export class UMatcher {
     await ensureJaxInit(this.cfg.device);
     if (this.templateModel && this.searchModel) return;
 
-    onProgress?.({ label: "onnx runtime", done: 0, total: 3 });
-    const ONNXModel = await loadOnnxModel();
-
-    onProgress?.({ label: "template branch", done: 1, total: 3 });
+    onProgress?.({ label: "template branch", done: 0, total: 2 });
     const templateBytes = await fetchBytes(this.cfg.templateBranchUrl);
     this.templateModel = new ONNXModel(templateBytes);
 
-    onProgress?.({ label: "search branch", done: 2, total: 3 });
+    onProgress?.({ label: "search branch", done: 1, total: 2 });
     const searchBytes = await fetchBytes(this.cfg.searchBranchUrl);
     this.searchModel = new ONNXModel(searchBytes);
 
-    onProgress?.({ label: "ready", done: 3, total: 3 });
+    onProgress?.({ label: "ready", done: 2, total: 2 });
   }
 
   /** Release model weights when you're done. */
@@ -160,14 +171,14 @@ export class UMatcher {
     };
   }
 
-  private requireTemplate(): IOnnxModel {
+  private requireTemplate(): ONNXModel {
     if (!this.templateModel) {
       throw new Error("UMatcher: call await .load() before running inference");
     }
     return this.templateModel;
   }
 
-  private requireSearch(): IOnnxModel {
+  private requireSearch(): ONNXModel {
     if (!this.searchModel) {
       throw new Error("UMatcher: call await .load() before running inference");
     }
