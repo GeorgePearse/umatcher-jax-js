@@ -1,0 +1,188 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  background: #0b0f17;
+  color: #e5e7eb;
+  min-height: 100vh;
+}
+
+header {
+  padding: 2rem 2rem 1rem;
+  border-bottom: 1px solid #1f2937;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0;
+  color: #94a3b8;
+  max-width: 52rem;
+}
+
+.backend {
+  margin-top: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  color: #4ade80;
+}
+
+main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+}
+
+@media (max-width: 1000px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.help {
+  margin: 0 0 1rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.dropzone {
+  position: relative;
+  border: 2px dashed #374151;
+  border-radius: 8px;
+  padding: 1.25rem;
+  text-align: center;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.dropzone:hover,
+.dropzone.drag {
+  border-color: #22c55e;
+  color: #d1fae5;
+}
+
+.canvas-wrap {
+  margin-top: 1rem;
+  overflow: auto;
+  background: #0b0f17;
+  border-radius: 6px;
+  max-height: 60vh;
+}
+
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+#refCanvas,
+#searchCanvas {
+  cursor: crosshair;
+}
+
+.template-preview {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.template-preview canvas {
+  border: 1px solid #1f2937;
+  border-radius: 4px;
+  background: #000;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  align-items: center;
+}
+
+.controls label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+button {
+  background: #22c55e;
+  color: #052e16;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #334155;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+select,
+input[type="range"] {
+  background: #0b0f17;
+  color: #e5e7eb;
+  border: 1px solid #1f2937;
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+}
+
+#status {
+  margin-top: 0.5rem;
+  min-height: 1.2em;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+footer {
+  padding: 1rem 2rem 2rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+footer a {
+  color: #86efac;
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
+}

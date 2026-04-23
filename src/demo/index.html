@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UMatcher in jax-js - in-browser template matching</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>UMatcher &middot; jax-js</h1>
+      <p class="tagline">
+        4M-parameter template matching, running entirely in your browser on
+        WebGPU / Wasm. No server. No upload. Your images never leave this tab.
+      </p>
+      <p id="backend-line" class="backend">Initialising jax-js...</p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>1. Reference image + template box</h2>
+        <p class="help">
+          Drop or choose an image, then drag on it to select the object you
+          want to match.
+        </p>
+        <div class="dropzone" id="refDrop">
+          <input type="file" id="refFile" accept="image/*" hidden />
+          <span>Drop reference image or click to choose</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="refCanvas"></canvas>
+        </div>
+        <div class="template-preview">
+          <span>Template crop:</span>
+          <canvas id="templateCanvas" width="128" height="128"></canvas>
+          <button id="setTemplateBtn" disabled>Set template</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>2. Search image</h2>
+        <p class="help">
+          Drop or choose the scene you want to search in, then hit Detect.
+        </p>
+        <div class="dropzone" id="searchDrop">
+          <input type="file" id="searchFile" accept="image/*" hidden />
+          <span>Drop search image or click to choose</span>
+        </div>
+        <div class="controls">
+          <label>
+            Threshold
+            <input
+              id="threshold"
+              type="range"
+              min="0.05"
+              max="0.95"
+              step="0.01"
+              value="0.5"
+            />
+            <span id="thresholdValue">0.50</span>
+          </label>
+          <label>
+            Pyramid
+            <select id="pyramid">
+              <option value="1.0">single-scale (1.0)</option>
+              <option value="0.7,1.0,1.3" selected>3 levels (0.7 / 1.0 / 1.3)</option>
+              <option value="0.5,0.7,1.0,1.3,1.7">5 levels</option>
+            </select>
+          </label>
+          <button id="detectBtn" disabled>Detect</button>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="searchCanvas"></canvas>
+        </div>
+        <p id="status"></p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Port of
+        <a href="https://github.com/aemior/UMatcher" target="_blank" rel="noopener"
+          >aemior/UMatcher</a
+        >
+        to
+        <a href="https://github.com/ekzhang/jax-js" target="_blank" rel="noopener"
+          >ekzhang/jax-js</a
+        >. Source:
+        <a href="https://github.com/GeorgePearse/umatcher-jax-js" target="_blank" rel="noopener"
+          >GeorgePearse/umatcher-jax-js</a
+        >.
+      </p>
+    </footer>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

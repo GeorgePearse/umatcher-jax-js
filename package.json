@@ -1,0 +1,44 @@
+{
+  "name": "umatcher-jax-js",
+  "version": "0.1.0",
+  "description": "UMatcher template matching model ported to jax-js for exclusive in-browser deployment.",
+  "type": "module",
+  "main": "dist/umatcher.js",
+  "module": "dist/umatcher.js",
+  "types": "dist/umatcher.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:lib": "tsc -p tsconfig.lib.json",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,html,css}\""
+  },
+  "keywords": [
+    "template-matching",
+    "jax-js",
+    "webgpu",
+    "wasm",
+    "object-detection",
+    "object-tracking",
+    "umatcher",
+    "onnx",
+    "browser",
+    "ml"
+  ],
+  "author": "GeorgePearse",
+  "license": "MIT",
+  "dependencies": {
+    "@jax-js/jax": "^0.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}
