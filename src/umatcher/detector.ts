@@ -14,6 +14,19 @@ export interface DetectionResult {
   scores: number[];
 }
 
+export interface PreparedSearchWindow {
+  x: number;
+  y: number;
+  scale: number;
+  tensor: Float32Array;
+}
+
+export interface PreparedSearch {
+  originalWidth: number;
+  originalHeight: number;
+  windows: PreparedSearchWindow[];
+}
+
 export interface DetectOptions {
   threshold?: number;
   pyramid?: PyramidScales;
@@ -109,19 +122,30 @@ export class UDetector {
       throw new Error("Call setTemplate() before detect()");
     }
     const threshold = opts.threshold ?? 0.5;
+    const iouThreshold = opts.nmsIou ?? 0.5;
+    const prepared = this.prepareSearch(image, opts, this.scaleFactor);
+    return this.detectPrepared(prepared, { threshold, nmsIou: iouThreshold });
+  }
+
+  /**
+   * Precompute resized search-window tensors. This is useful for UIs where the
+   * image is known before the template box is drawn.
+   */
+  prepareSearch(
+    image: ImageData,
+    opts: DetectOptions = {},
+    scaleFactor = this.scaleFactor,
+  ): PreparedSearch {
     const pyramid = opts.pyramid ?? DEFAULT_PYRAMID;
     const overlap = opts.overlap ?? 0.5;
     const maxSearchSide = opts.maxSearchSide ?? Infinity;
-    const iouThreshold = opts.nmsIou ?? 0.5;
     const { searchSize } = this.matcher.cfg;
-
     const originalW = image.width;
     const originalH = image.height;
-    const allBoxes: Bbox[] = [];
-    const allScores: number[] = [];
+    const windows: PreparedSearchWindow[] = [];
 
     for (const baseScale of pyramid) {
-      let scale = this.scaleFactor * baseScale;
+      let scale = scaleFactor * baseScale;
       if (Number.isFinite(maxSearchSide) && maxSearchSide > 0) {
         scale = Math.min(scale, maxSearchSide / Math.max(originalW, originalH));
       }
@@ -149,25 +173,49 @@ export class UDetector {
 
       for (const x of xStarts) {
         for (const y of yStarts) {
-          const window = cropper(scaledCanvas, x, y);
-          const { boxes, scores } = await this.searchWindow(window);
-          for (let i = 0; i < boxes.length; i++) {
-            const [cx, cy, w, h] = boxes[i];
-            // Translate window-local coords to the resized-image coords,
-            // then back to original image coords.
-            const gcx = (cx + x) / scale;
-            const gcy = (cy + y) / scale;
-            const gw = w / scale;
-            const gh = h / scale;
-            const x1 = clamp(gcx - gw / 2, 0, originalW);
-            const y1 = clamp(gcy - gh / 2, 0, originalH);
-            const x2 = clamp(gcx + gw / 2, 0, originalW);
-            const y2 = clamp(gcy + gh / 2, 0, originalH);
-            if (x2 <= x1 || y2 <= y1) continue;
-            allBoxes.push([x1, y1, x2, y2]);
-            allScores.push(scores[i]);
-          }
+          windows.push({
+            x,
+            y,
+            scale,
+            tensor: imageDataToTensor(cropper(scaledCanvas, x, y)),
+          });
         }
+      }
+    }
+
+    return { originalWidth: originalW, originalHeight: originalH, windows };
+  }
+
+  async detectPrepared(
+    prepared: PreparedSearch,
+    opts: Pick<DetectOptions, "threshold" | "nmsIou"> = {},
+  ): Promise<DetectionResult> {
+    if (!this.templateEmbedding) {
+      throw new Error("Call setTemplate() before detectPrepared()");
+    }
+    const threshold = opts.threshold ?? 0.5;
+    const iouThreshold = opts.nmsIou ?? 0.5;
+    const { originalWidth: originalW, originalHeight: originalH } = prepared;
+    const allBoxes: Bbox[] = [];
+    const allScores: number[] = [];
+
+    for (const window of prepared.windows) {
+      const { boxes, scores } = await this.searchTensor(window.tensor);
+      for (let i = 0; i < boxes.length; i++) {
+        const [cx, cy, w, h] = boxes[i];
+        // Translate window-local coords to the resized-image coords, then
+        // back to original image coords.
+        const gcx = (cx + window.x) / window.scale;
+        const gcy = (cy + window.y) / window.scale;
+        const gw = w / window.scale;
+        const gh = h / window.scale;
+        const x1 = clamp(gcx - gw / 2, 0, originalW);
+        const y1 = clamp(gcy - gh / 2, 0, originalH);
+        const x2 = clamp(gcx + gw / 2, 0, originalW);
+        const y2 = clamp(gcy + gh / 2, 0, originalH);
+        if (x2 <= x1 || y2 <= y1) continue;
+        allBoxes.push([x1, y1, x2, y2]);
+        allScores.push(scores[i]);
       }
     }
 
@@ -188,6 +236,17 @@ export class UDetector {
     }
     const { searchSize } = this.matcher.cfg;
     const tensor = imageDataToTensor(window);
+    return this.searchTensor(tensor);
+  }
+
+  async searchTensor(tensor: Float32Array): Promise<{
+    boxes: [number, number, number, number][];
+    scores: number[];
+  }> {
+    if (!this.templateEmbedding) {
+      throw new Error("Call setTemplate() before searchTensor()");
+    }
+    const { searchSize } = this.matcher.cfg;
     const out = await this.matcher.runSearch(tensor, this.templateEmbedding);
     return decodeHeatmap(out, searchSize, this.featSz, this.matcher.cfg.stride, 0.1);
   }

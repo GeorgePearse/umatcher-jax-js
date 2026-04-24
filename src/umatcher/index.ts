@@ -6,7 +6,12 @@
  */
 
 export { UMatcher, buildUMatcher } from "./matcher.js";
-export { UDetector, type DetectionResult } from "./detector.js";
+export {
+  UDetector,
+  type DetectionResult,
+  type PreparedSearch,
+  type PreparedSearchWindow,
+} from "./detector.js";
 export { UTracker, type TrackResult } from "./tracker.js";
 export {
   UClassifier,

@@ -9,6 +9,7 @@ import {
   drawBoxes,
   type Bbox,
   type CxCyWh,
+  type PreparedSearch,
 } from "@umatcher";
 
 import { IMAGE_SAMPLES } from "./samples.js";
@@ -16,6 +17,7 @@ import { IMAGE_SAMPLES } from "./samples.js";
 type DetectionState = {
   image: HTMLImageElement | null;
   imageData: ImageData | null;
+  preparedSearch: PreparedSearch | null;
   bbox: Bbox | null; // in natural coordinates of image
   boxes: Bbox[];
   scores: number[];
@@ -24,6 +26,7 @@ type DetectionState = {
 const state: DetectionState = {
   image: null,
   imageData: null,
+  preparedSearch: null,
   bbox: null,
   boxes: [],
   scores: [],
@@ -101,6 +104,7 @@ async function loadSelectedImage(): Promise<void> {
   const runId = ++detectionRunId;
   state.image = null;
   state.imageData = null;
+  state.preparedSearch = null;
   state.bbox = null;
   state.boxes = [];
   state.scores = [];
@@ -111,8 +115,21 @@ async function loadSelectedImage(): Promise<void> {
     if (runId !== detectionRunId) return;
     state.image = image;
     state.imageData = imageFromSource(image);
+    const t0 = performance.now();
+    state.preparedSearch = detector.prepareSearch(
+      state.imageData,
+      {
+        pyramid: DETECTION_PYRAMID,
+        overlap: DETECTION_OVERLAP,
+        maxSearchSide: DETECTION_MAX_SEARCH_SIDE,
+      },
+      1,
+    );
+    const prepMs = performance.now() - t0;
     drawImageCanvas();
-    setStatus("Image loaded - drag a box around the object to match.");
+    setStatus(
+      `Image ready - precomputed ${state.preparedSearch.windows.length} search window(s) in ${prepMs.toFixed(0)} ms. Drag a box around the object to match.`,
+    );
   } catch (err) {
     if (runId !== detectionRunId) return;
     setStatus(`Image load failed: ${(err as Error).message}`);
@@ -252,12 +269,16 @@ async function handleDetect(): Promise<void> {
     await detector.setTemplate(state.imageData, xyxyToCxcywh(state.bbox));
     if (runId !== detectionRunId) return;
     const t0 = performance.now();
-    const { boxes, scores } = await detector.detect(state.imageData, {
-      threshold: DETECTION_THRESHOLD,
-      pyramid: DETECTION_PYRAMID,
-      overlap: DETECTION_OVERLAP,
-      maxSearchSide: DETECTION_MAX_SEARCH_SIDE,
-    });
+    const { boxes, scores } = state.preparedSearch
+      ? await detector.detectPrepared(state.preparedSearch, {
+          threshold: DETECTION_THRESHOLD,
+        })
+      : await detector.detect(state.imageData, {
+          threshold: DETECTION_THRESHOLD,
+          pyramid: DETECTION_PYRAMID,
+          overlap: DETECTION_OVERLAP,
+          maxSearchSide: DETECTION_MAX_SEARCH_SIDE,
+        });
     if (runId !== detectionRunId) return;
     const dt = performance.now() - t0;
     state.boxes = boxes;
