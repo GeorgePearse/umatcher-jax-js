@@ -16,74 +16,26 @@
       <p id="backend-line" class="backend">Initialising jax-js...</p>
     </header>
 
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="detection" type="button">Detection</button>
-      <button class="tab" data-tab="tracking" type="button">Tracking</button>
-    </nav>
-
     <!-- =================== DETECTION =================== -->
     <section id="detection-view" class="view active">
       <main>
         <section class="panel">
           <h2>Image + match box</h2>
           <p class="help">
-            Drop or choose an image, then drag on it to select the object you
-            want to match. Detection runs automatically and results are drawn
+            Choose one of the repo sample images, then drag on it to select
+            the object you want to match. Detection runs automatically and results are drawn
             back onto the same image.
           </p>
-          <div class="dropzone" id="imageDrop">
-            <input type="file" id="imageFile" accept="image/*" hidden />
-            <span>Drop image or click to choose</span>
+          <div class="controls">
+            <label>
+              Sample image
+              <select id="imageSelect"></select>
+            </label>
           </div>
           <div class="canvas-wrap">
             <canvas id="imageCanvas"></canvas>
           </div>
           <p id="status"></p>
-        </section>
-      </main>
-    </section>
-
-    <!-- =================== TRACKING =================== -->
-    <section id="tracking-view" class="view">
-      <section class="preset-bar">
-        <h3>Tracking samples</h3>
-        <p class="help">
-          Load one of the video presets. The initial ROI on the first frame
-          matches the upstream default so the tracked target is identical.
-        </p>
-        <div class="preset-grid" id="trackerPresets"></div>
-      </section>
-
-      <main>
-        <section class="panel">
-          <h2>Single-object tracking</h2>
-          <p class="help">
-            Drop a video (or pick a preset). Draw a box on the first frame,
-            hit <strong>Init tracker</strong>, then <strong>Play</strong> to
-            follow the object frame-by-frame.
-          </p>
-          <div class="dropzone" id="videoDrop">
-            <input type="file" id="videoFile" accept="video/*" hidden />
-            <span>Drop video or click to choose</span>
-          </div>
-          <div class="canvas-wrap">
-            <canvas id="trackerCanvas"></canvas>
-            <video id="trackerVideo" muted playsinline preload="auto" hidden></video>
-          </div>
-          <div class="controls">
-            <button id="initTrackerBtn" disabled>Init tracker</button>
-            <button id="playTrackerBtn" disabled>Play</button>
-            <button id="stopTrackerBtn" disabled>Stop</button>
-            <label>
-              FPS cap
-              <select id="trackerFpsCap">
-                <option value="0">unlimited</option>
-                <option value="15" selected>15</option>
-                <option value="30">30</option>
-              </select>
-            </label>
-          </div>
-          <p id="trackerStatus"></p>
         </section>
       </main>
     </section>

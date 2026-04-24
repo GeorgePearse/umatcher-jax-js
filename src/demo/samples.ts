@@ -1,28 +1,34 @@
-/**
- * Built-in tracking samples that mirror the upstream UMatcher reference demos.
- *
- * The ROIs and image paths come directly from the upstream defaults so the
- * output is numerically comparable to the reference implementation.
- */
-
-import type { CxCyWh } from "@umatcher";
-
-export interface TrackerSample {
+/** Built-in image samples shipped in `public/samples`. */
+export interface ImageSample {
   id: string;
   label: string;
-  description: string;
-  videoUrl: string;
-  /** Initial tracking ROI in [cx, cy, w, h] pixels of the first frame. */
-  initRoi: CxCyWh;
+  url: string;
 }
 
-export const TRACKER_SAMPLES: TrackerSample[] = [
+export const IMAGE_SAMPLES: ImageSample[] = [
   {
-    id: "girl-dance",
-    label: "Girl dance (upstream default)",
-    description:
-      "Single-object tracking on girl_dance.mp4 with the upstream init ROI (cxcywh [547, 188, 43, 57]).",
-    videoUrl: "/samples/girl_dance.mp4",
-    initRoi: [547, 188, 43, 57],
+    id: "test-1",
+    label: "test_1.png",
+    url: "/samples/test_1.png",
+  },
+  {
+    id: "test-2",
+    label: "test_2.png",
+    url: "/samples/test_2.png",
+  },
+  {
+    id: "test-3",
+    label: "test_3.png",
+    url: "/samples/test_3.png",
+  },
+  {
+    id: "test-4",
+    label: "test_4.png",
+    url: "/samples/test_4.png",
+  },
+  {
+    id: "template-3",
+    label: "template_3.png",
+    url: "/samples/template_3.png",
   },
 ];

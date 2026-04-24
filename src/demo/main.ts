@@ -1,21 +1,17 @@
 /**
- * Demo driver for UMatcher-in-jax-js. Entirely client-side.
- *
- * Two tabs: Detection (single image + drawn match box) and Tracking
- * (video playback with UTracker). Tracking is preloaded with the same sample
- * video and default ROI as the upstream UMatcher reference implementation.
+ * Detection demo for UMatcher-in-jax-js. Pick a repo sample image, draw a box,
+ * and render detection results back onto that same image.
  */
 
 import {
   buildUMatcher,
   UDetector,
-  UTracker,
   drawBoxes,
   type Bbox,
   type CxCyWh,
 } from "@umatcher";
 
-import { TRACKER_SAMPLES, type TrackerSample } from "./samples.js";
+import { IMAGE_SAMPLES } from "./samples.js";
 
 type DetectionState = {
   image: HTMLImageElement | null;
@@ -49,37 +45,20 @@ const matcher = buildUMatcher({
 });
 
 const detector = new UDetector(matcher);
-const tracker = new UTracker(matcher);
-
-// ---------------------- Tabs ----------------------
-const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
-const views = Array.from(document.querySelectorAll<HTMLElement>(".view"));
-tabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    const target = tab.dataset.tab;
-    tabs.forEach((t) => t.classList.toggle("active", t === tab));
-    views.forEach((v) => v.classList.toggle("active", v.id === `${target}-view`));
-  });
-});
 
 // ---------------------- Detection ----------------------
 const backendLine = byId<HTMLParagraphElement>("backend-line");
-const imageDrop = byId<HTMLDivElement>("imageDrop");
-const imageFile = byId<HTMLInputElement>("imageFile");
+const imageSelect = byId<HTMLSelectElement>("imageSelect");
 const imageCanvas = byId<HTMLCanvasElement>("imageCanvas");
 const statusEl = byId<HTMLParagraphElement>("status");
 
-wireDropzone(imageDrop, imageFile, (img) => {
-  detectionRunId++;
-  state.image = img;
-  state.bbox = null;
-  state.boxes = [];
-  state.scores = [];
-  drawImageCanvas();
-  setStatus("Image loaded - drag a box around the object to match.");
+populateImageSelect();
+imageSelect.addEventListener("change", () => {
+  void loadSelectedImage();
 });
 
 wireBboxSelection();
+void loadSelectedImage();
 
 // Kick off model loading up front so the user doesn't wait on the first click.
 const matcherReady = (async () => {
@@ -96,34 +75,53 @@ const matcherReady = (async () => {
   }
 })();
 
-function wireDropzone(
-  dz: HTMLDivElement,
-  input: HTMLInputElement,
-  onImage: (img: HTMLImageElement) => void,
-): void {
-  dz.addEventListener("click", () => input.click());
-  dz.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dz.classList.add("drag");
-  });
-  dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
-  dz.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dz.classList.remove("drag");
-    const file = e.dataTransfer?.files[0];
-    if (file) loadFile(file, onImage);
-  });
-  input.addEventListener("change", () => {
-    const file = input.files?.[0];
-    if (file) loadFile(file, onImage);
+function populateImageSelect(): void {
+  imageSelect.replaceChildren(
+    ...IMAGE_SAMPLES.map((sample) => {
+      const option = document.createElement("option");
+      option.value = sample.url;
+      option.textContent = sample.label;
+      return option;
+    }),
+  );
+}
+
+async function loadSelectedImage(): Promise<void> {
+  const sample = IMAGE_SAMPLES.find((item) => item.url === imageSelect.value);
+  if (!sample) return;
+  const runId = ++detectionRunId;
+  state.image = null;
+  state.bbox = null;
+  state.boxes = [];
+  state.scores = [];
+  clearImageCanvas();
+  setStatus(`Loading ${sample.label}...`);
+  try {
+    const image = await loadImage(sample.url);
+    if (runId !== detectionRunId) return;
+    state.image = image;
+    drawImageCanvas();
+    setStatus("Image loaded - drag a box around the object to match.");
+  } catch (err) {
+    if (runId !== detectionRunId) return;
+    setStatus(`Image load failed: ${(err as Error).message}`);
+  }
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load ${url}`));
+    img.src = url;
   });
 }
 
-function loadFile(file: File, onImage: (img: HTMLImageElement) => void): void {
-  const img = new Image();
-  img.onload = () => onImage(img);
-  img.onerror = () => setStatus(`Could not load ${file.name}`);
-  img.src = URL.createObjectURL(file);
+function clearImageCanvas(): void {
+  const ctx = imageCanvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
 }
 
 function drawImageCanvas(): void {
@@ -282,15 +280,10 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-function imageFromSource(
-  img: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement,
-): ImageData {
+function imageFromSource(img: HTMLImageElement | HTMLCanvasElement): ImageData {
   let w: number;
   let h: number;
-  if (img instanceof HTMLVideoElement) {
-    w = img.videoWidth;
-    h = img.videoHeight;
-  } else if (img instanceof HTMLImageElement) {
+  if (img instanceof HTMLImageElement) {
     w = img.naturalWidth;
     h = img.naturalHeight;
   } else {
@@ -314,226 +307,4 @@ function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
-}
-
-// ---------------------- Tracking ----------------------
-const videoDrop = byId<HTMLDivElement>("videoDrop");
-const videoFile = byId<HTMLInputElement>("videoFile");
-const trackerCanvas = byId<HTMLCanvasElement>("trackerCanvas");
-const trackerVideo = byId<HTMLVideoElement>("trackerVideo");
-const initTrackerBtn = byId<HTMLButtonElement>("initTrackerBtn");
-const playTrackerBtn = byId<HTMLButtonElement>("playTrackerBtn");
-const stopTrackerBtn = byId<HTMLButtonElement>("stopTrackerBtn");
-const trackerFpsCap = byId<HTMLSelectElement>("trackerFpsCap");
-const trackerStatus = byId<HTMLParagraphElement>("trackerStatus");
-const trackerPresetGrid = byId<HTMLDivElement>("trackerPresets");
-
-let trackerBbox: Bbox | null = null; // bbox drawn on the first frame in video coords
-let trackerRunning = false;
-let trackerInited = false;
-
-wireDropzone(videoDrop, videoFile, () => {
-  /* not used - we load via URL */
-});
-videoFile.addEventListener("change", () => {
-  const file = videoFile.files?.[0];
-  if (file) loadTrackerVideo(URL.createObjectURL(file));
-});
-videoDrop.addEventListener("drop", (e) => {
-  const file = e.dataTransfer?.files[0];
-  if (file) loadTrackerVideo(URL.createObjectURL(file));
-});
-
-initTrackerBtn.addEventListener("click", handleInitTracker);
-playTrackerBtn.addEventListener("click", handlePlayTracker);
-stopTrackerBtn.addEventListener("click", handleStopTracker);
-
-// Render tracker presets.
-for (const sample of TRACKER_SAMPLES) {
-  trackerPresetGrid.appendChild(buildTrackerPresetCard(sample));
-}
-
-function buildTrackerPresetCard(sample: TrackerSample): HTMLButtonElement {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "preset-card";
-  btn.innerHTML = `
-    <div class="thumb-row">
-      <video src="${sample.videoUrl}" muted preload="metadata"></video>
-    </div>
-    <h4>${sample.label}</h4>
-    <p>${sample.description}</p>
-  `;
-  btn.addEventListener("click", async () => {
-    await loadTrackerVideo(sample.videoUrl);
-    // Convert cxcywh to xyxy for drawing; init() will re-convert.
-    const [cx, cy, w, h] = sample.initRoi;
-    trackerBbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
-    drawTrackerFrame();
-    initTrackerBtn.disabled = false;
-    setTrackerStatus("Preset loaded - hit Init tracker to run on the first frame.");
-  });
-  return btn;
-}
-
-async function loadTrackerVideo(url: string): Promise<void> {
-  trackerVideo.src = url;
-  trackerVideo.hidden = false;
-  trackerBbox = null;
-  trackerInited = false;
-  playTrackerBtn.disabled = true;
-  stopTrackerBtn.disabled = true;
-  initTrackerBtn.disabled = true;
-  await new Promise<void>((resolve, reject) => {
-    trackerVideo.onloadedmetadata = () => resolve();
-    trackerVideo.onerror = () => reject(new Error("video load failed"));
-  });
-  trackerVideo.currentTime = 0;
-  await new Promise<void>((resolve) => {
-    trackerVideo.onseeked = () => resolve();
-  });
-  fitVideoCanvas();
-  drawTrackerFrame();
-  setTrackerStatus("Video ready - draw a box on the first frame or pick a preset.");
-}
-
-function fitVideoCanvas(): void {
-  const maxW = 900;
-  const ratio = Math.min(1, maxW / trackerVideo.videoWidth);
-  trackerCanvas.width = Math.round(trackerVideo.videoWidth * ratio);
-  trackerCanvas.height = Math.round(trackerVideo.videoHeight * ratio);
-  trackerCanvas.dataset.ratio = ratio.toString();
-}
-
-function drawTrackerFrame(): void {
-  const ctx = trackerCanvas.getContext("2d");
-  if (!ctx) return;
-  ctx.drawImage(trackerVideo, 0, 0, trackerCanvas.width, trackerCanvas.height);
-  if (trackerBbox) {
-    const ratio = parseFloat(trackerCanvas.dataset.ratio || "1");
-    const [x1, y1, x2, y2] = trackerBbox;
-    ctx.strokeStyle = trackerInited ? "#22c55e" : "#facc15";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x1 * ratio, y1 * ratio, (x2 - x1) * ratio, (y2 - y1) * ratio);
-    if (trackerInited && tracker.score > 0) {
-      ctx.fillStyle = "#22c55e";
-      ctx.font = "14px system-ui, sans-serif";
-      ctx.fillText(`score ${tracker.score.toFixed(2)}`, x1 * ratio + 4, Math.max(12, y1 * ratio - 4));
-    }
-  }
-}
-
-// Let the user draw a bbox on the first frame of the video.
-{
-  let dragStart: { x: number; y: number } | null = null;
-  trackerCanvas.addEventListener("mousedown", (e) => {
-    if (!trackerVideo.src) return;
-    const { x, y } = videoCoordsFromEvent(e);
-    dragStart = { x, y };
-  });
-  trackerCanvas.addEventListener("mousemove", (e) => {
-    if (!dragStart) return;
-    const { x, y } = videoCoordsFromEvent(e);
-    trackerBbox = [
-      Math.min(dragStart.x, x),
-      Math.min(dragStart.y, y),
-      Math.max(dragStart.x, x),
-      Math.max(dragStart.y, y),
-    ];
-    trackerInited = false;
-    drawTrackerFrame();
-  });
-  const finish = () => {
-    dragStart = null;
-    initTrackerBtn.disabled = !trackerBbox;
-  };
-  trackerCanvas.addEventListener("mouseup", finish);
-  trackerCanvas.addEventListener("mouseleave", finish);
-}
-
-function videoCoordsFromEvent(e: MouseEvent): { x: number; y: number } {
-  const rect = trackerCanvas.getBoundingClientRect();
-  const ratio = parseFloat(trackerCanvas.dataset.ratio || "1");
-  return {
-    x: (e.clientX - rect.left) / ratio,
-    y: (e.clientY - rect.top) / ratio,
-  };
-}
-
-async function handleInitTracker(): Promise<void> {
-  if (!trackerBbox || !trackerVideo.src) return;
-  setTrackerStatus("Initialising tracker on the first frame...");
-  trackerVideo.currentTime = 0;
-  await new Promise<void>((resolve) => {
-    trackerVideo.onseeked = () => resolve();
-  });
-  try {
-    const frame = imageFromSource(trackerVideo);
-    const [x1, y1, x2, y2] = trackerBbox;
-    const cxcywh: CxCyWh = [
-      (x1 + x2) / 2,
-      (y1 + y2) / 2,
-      x2 - x1,
-      y2 - y1,
-    ];
-    await tracker.init(frame, cxcywh);
-    trackerInited = true;
-    drawTrackerFrame();
-    playTrackerBtn.disabled = false;
-    setTrackerStatus("Tracker initialised. Hit Play to start tracking.");
-  } catch (err) {
-    setTrackerStatus(`Init failed: ${(err as Error).message}`);
-  }
-}
-
-async function handlePlayTracker(): Promise<void> {
-  if (!trackerInited) return;
-  trackerRunning = true;
-  playTrackerBtn.disabled = true;
-  stopTrackerBtn.disabled = false;
-  const capFps = parseFloat(trackerFpsCap.value) || 0;
-  const frameMs = capFps > 0 ? 1000 / capFps : 0;
-  let frameCount = 0;
-  const t0 = performance.now();
-  // Nudge the video forward a bit so currentTime advances each step.
-  const step = 1 / (trackerVideo.duration > 0 ? 30 : 24);
-  while (trackerRunning && trackerVideo.currentTime < trackerVideo.duration - step) {
-    const tStart = performance.now();
-    trackerVideo.currentTime = Math.min(
-      trackerVideo.duration,
-      trackerVideo.currentTime + step,
-    );
-    await new Promise<void>((resolve) => {
-      const handler = () => {
-        trackerVideo.removeEventListener("seeked", handler);
-        resolve();
-      };
-      trackerVideo.addEventListener("seeked", handler);
-    });
-    const frame = imageFromSource(trackerVideo);
-    const { pos, score } = await tracker.track(frame);
-    const [cx, cy, w, h] = pos;
-    trackerBbox = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
-    drawTrackerFrame();
-    frameCount++;
-    const elapsed = (performance.now() - t0) / 1000;
-    setTrackerStatus(
-      `Tracking ${frameCount} frames, ${(frameCount / elapsed).toFixed(1)} fps, score ${score.toFixed(2)}`,
-    );
-    if (frameMs > 0) {
-      const wait = frameMs - (performance.now() - tStart);
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    }
-  }
-  handleStopTracker();
-}
-
-function handleStopTracker(): void {
-  trackerRunning = false;
-  playTrackerBtn.disabled = !trackerInited;
-  stopTrackerBtn.disabled = true;
-}
-
-function setTrackerStatus(msg: string): void {
-  trackerStatus.textContent = msg;
 }
