@@ -15,15 +15,23 @@ import { IMAGE_SAMPLES } from "./samples.js";
 
 type DetectionState = {
   image: HTMLImageElement | null;
+  imageData: ImageData | null;
   bbox: Bbox | null; // in natural coordinates of image
   boxes: Bbox[];
   scores: number[];
 };
 
-const state: DetectionState = { image: null, bbox: null, boxes: [], scores: [] };
+const state: DetectionState = {
+  image: null,
+  imageData: null,
+  bbox: null,
+  boxes: [],
+  scores: [],
+};
 let detectionRunId = 0;
 const DETECTION_THRESHOLD = 0.3;
-const DETECTION_PYRAMID = [0.7, 1.0, 1.3];
+const DETECTION_PYRAMID = [1.0];
+const DETECTION_OVERLAP = 0;
 
 // Model URLs are relative to the dev server's public root.
 const MODEL_BASE = "/models";
@@ -91,6 +99,7 @@ async function loadSelectedImage(): Promise<void> {
   if (!sample) return;
   const runId = ++detectionRunId;
   state.image = null;
+  state.imageData = null;
   state.bbox = null;
   state.boxes = [];
   state.scores = [];
@@ -100,6 +109,7 @@ async function loadSelectedImage(): Promise<void> {
     const image = await loadImage(sample.url);
     if (runId !== detectionRunId) return;
     state.image = image;
+    state.imageData = imageFromSource(image);
     drawImageCanvas();
     setStatus("Image loaded - drag a box around the object to match.");
   } catch (err) {
@@ -230,7 +240,7 @@ function toImageCoords(canvas: HTMLCanvasElement, e: MouseEvent): {
 }
 
 async function handleDetect(): Promise<void> {
-  if (!state.image || !state.bbox) return;
+  if (!state.image || !state.imageData || !state.bbox) return;
   const runId = ++detectionRunId;
   state.boxes = [];
   state.scores = [];
@@ -238,13 +248,13 @@ async function handleDetect(): Promise<void> {
   setStatus("Preparing template and detecting...");
   try {
     await matcherReady;
-    const imageData = imageFromSource(state.image);
-    await detector.setTemplate(imageData, xyxyToCxcywh(state.bbox));
+    await detector.setTemplate(state.imageData, xyxyToCxcywh(state.bbox));
     if (runId !== detectionRunId) return;
     const t0 = performance.now();
-    const { boxes, scores } = await detector.detect(imageData, {
+    const { boxes, scores } = await detector.detect(state.imageData, {
       threshold: DETECTION_THRESHOLD,
       pyramid: DETECTION_PYRAMID,
+      overlap: DETECTION_OVERLAP,
     });
     if (runId !== detectionRunId) return;
     const dt = performance.now() - t0;

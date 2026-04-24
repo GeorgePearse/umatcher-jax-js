@@ -125,12 +125,12 @@ export class UDetector {
       // Skip when image shrinks below a single window in both dims.
       if (scaledW < searchSize && scaledH < searchSize) continue;
 
-      let scaled = resize(image, scaledW, scaledH);
+      let scaledCanvas = imageDataToCanvas(resize(image, scaledW, scaledH));
 
       const padW = Math.max(0, searchSize - scaledW);
       const padH = Math.max(0, searchSize - scaledH);
       if (padW > 0 || padH > 0) {
-        scaled = padImage(scaled, scaledW + padW, scaledH + padH);
+        scaledCanvas = padCanvas(scaledCanvas, scaledW + padW, scaledH + padH);
         scaledW += padW;
         scaledH += padH;
       }
@@ -139,10 +139,11 @@ export class UDetector {
 
       const xStarts = buildStarts(scaledW, searchSize, step);
       const yStarts = buildStarts(scaledH, searchSize, step);
+      const cropper = createCropper(searchSize, searchSize);
 
       for (const x of xStarts) {
         for (const y of yStarts) {
-          const window = cropRegion(scaled, x, y, searchSize, searchSize);
+          const window = cropper(scaledCanvas, x, y);
           const { boxes, scores } = await this.searchWindow(window);
           for (let i = 0; i < boxes.length; i++) {
             const [cx, cy, w, h] = boxes[i];
@@ -208,7 +209,17 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-function padImage(img: ImageData, w: number, h: number): ImageData {
+function imageDataToCanvas(img: ImageData): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not acquire 2D canvas context");
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+function padCanvas(source: HTMLCanvasElement, w: number, h: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -216,36 +227,24 @@ function padImage(img: ImageData, w: number, h: number): ImageData {
   if (!ctx) throw new Error("Could not acquire 2D canvas context");
   ctx.fillStyle = "rgb(0,0,0)";
   ctx.fillRect(0, 0, w, h);
-  const src = document.createElement("canvas");
-  src.width = img.width;
-  src.height = img.height;
-  const sctx = src.getContext("2d");
-  if (!sctx) throw new Error("Could not acquire 2D canvas context");
-  sctx.putImageData(img, 0, 0);
-  ctx.drawImage(src, 0, 0);
-  return ctx.getImageData(0, 0, w, h);
+  ctx.drawImage(source, 0, 0);
+  return canvas;
 }
 
-function cropRegion(
-  img: ImageData,
+function createCropper(w: number, h: number): (
+  source: HTMLCanvasElement,
   x: number,
   y: number,
-  w: number,
-  h: number,
-): ImageData {
-  const src = document.createElement("canvas");
-  src.width = img.width;
-  src.height = img.height;
-  const sctx = src.getContext("2d");
-  if (!sctx) throw new Error("Could not acquire 2D canvas context");
-  sctx.putImageData(img, 0, 0);
+) => ImageData {
   const dst = document.createElement("canvas");
   dst.width = w;
   dst.height = h;
-  const dctx = dst.getContext("2d");
+  const dctx = dst.getContext("2d", { willReadFrequently: true });
   if (!dctx) throw new Error("Could not acquire 2D canvas context");
-  dctx.drawImage(src, x, y, w, h, 0, 0, w, h);
-  return dctx.getImageData(0, 0, w, h);
+  return (source, x, y) => {
+    dctx.drawImage(source, x, y, w, h, 0, 0, w, h);
+    return dctx.getImageData(0, 0, w, h);
+  };
 }
 
 function buildStarts(total: number, size: number, step: number): number[] {
