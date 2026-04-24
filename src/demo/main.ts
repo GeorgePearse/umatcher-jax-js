@@ -1,10 +1,9 @@
 /**
  * Demo driver for UMatcher-in-jax-js. Entirely client-side.
  *
- * Two tabs: Detection (static reference + search images) and Tracking
- * (video playback with UTracker). Both are preloaded with the exact same
- * sample images/videos the upstream UMatcher reference implementation
- * uses, with default ROIs that match its defaults.
+ * Two tabs: Detection (single image + drawn match box) and Tracking
+ * (video playback with UTracker). Tracking is preloaded with the same sample
+ * video and default ROI as the upstream UMatcher reference implementation.
  */
 
 import {
@@ -16,20 +15,19 @@ import {
   type CxCyWh,
 } from "@umatcher";
 
-import {
-  DETECTION_SAMPLES,
-  TRACKER_SAMPLES,
-  type DetectionSample,
-  type TrackerSample,
-} from "./samples.js";
+import { TRACKER_SAMPLES, type TrackerSample } from "./samples.js";
 
 type DetectionState = {
-  refImage: HTMLImageElement | null;
-  searchImage: HTMLImageElement | null;
-  bbox: Bbox | null; // in natural coordinates of refImage
+  image: HTMLImageElement | null;
+  bbox: Bbox | null; // in natural coordinates of image
+  boxes: Bbox[];
+  scores: number[];
 };
 
-const state: DetectionState = { refImage: null, searchImage: null, bbox: null };
+const state: DetectionState = { image: null, bbox: null, boxes: [], scores: [] };
+let detectionRunId = 0;
+const DETECTION_THRESHOLD = 0.3;
+const DETECTION_PYRAMID = [0.7, 1.0, 1.3];
 
 // Model URLs are relative to the dev server's public root.
 const MODEL_BASE = "/models";
@@ -66,101 +64,25 @@ tabs.forEach((tab) => {
 
 // ---------------------- Detection ----------------------
 const backendLine = byId<HTMLParagraphElement>("backend-line");
-const refDrop = byId<HTMLDivElement>("refDrop");
-const refFile = byId<HTMLInputElement>("refFile");
-const refCanvas = byId<HTMLCanvasElement>("refCanvas");
-const templateCanvas = byId<HTMLCanvasElement>("templateCanvas");
-const setTemplateBtn = byId<HTMLButtonElement>("setTemplateBtn");
-const searchDrop = byId<HTMLDivElement>("searchDrop");
-const searchFile = byId<HTMLInputElement>("searchFile");
-const searchCanvas = byId<HTMLCanvasElement>("searchCanvas");
-const detectBtn = byId<HTMLButtonElement>("detectBtn");
+const imageDrop = byId<HTMLDivElement>("imageDrop");
+const imageFile = byId<HTMLInputElement>("imageFile");
+const imageCanvas = byId<HTMLCanvasElement>("imageCanvas");
 const statusEl = byId<HTMLParagraphElement>("status");
-const thresholdInput = byId<HTMLInputElement>("threshold");
-const thresholdValue = byId<HTMLSpanElement>("thresholdValue");
-const pyramidSelect = byId<HTMLSelectElement>("pyramid");
-const detectionPresetGrid = byId<HTMLDivElement>("detectionPresets");
 
-thresholdInput.addEventListener("input", () => {
-  thresholdValue.textContent = Number(thresholdInput.value).toFixed(2);
-});
-
-wireDropzone(refDrop, refFile, (img) => {
-  state.refImage = img;
+wireDropzone(imageDrop, imageFile, (img) => {
+  detectionRunId++;
+  state.image = img;
   state.bbox = null;
-  drawRef();
-  clearTemplate();
-});
-
-wireDropzone(searchDrop, searchFile, (img) => {
-  state.searchImage = img;
-  drawSearch();
+  state.boxes = [];
+  state.scores = [];
+  drawImageCanvas();
+  setStatus("Image loaded - drag a box around the object to match.");
 });
 
 wireBboxSelection();
-setTemplateBtn.addEventListener("click", handleSetTemplate);
-detectBtn.addEventListener("click", handleDetect);
-
-// Render preset cards for detection.
-for (const sample of DETECTION_SAMPLES) {
-  detectionPresetGrid.appendChild(buildDetectionPresetCard(sample));
-}
-
-function buildDetectionPresetCard(sample: DetectionSample): HTMLButtonElement {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "preset-card";
-  btn.innerHTML = `
-    <div class="thumb-row">
-      <img src="${sample.referenceUrl}" alt="reference" loading="lazy" />
-      ${
-        sample.referenceUrl !== sample.searchUrl
-          ? `<img src="${sample.searchUrl}" alt="search" loading="lazy" />`
-          : ""
-      }
-    </div>
-    <h4>${sample.label}</h4>
-    <p>${sample.description}</p>
-  `;
-  btn.addEventListener("click", () => loadDetectionPreset(sample));
-  return btn;
-}
-
-async function loadDetectionPreset(sample: DetectionSample): Promise<void> {
-  setStatus(`Loading preset: ${sample.label}...`);
-  try {
-    const [refImg, searchImg] = await Promise.all([
-      loadImage(sample.referenceUrl),
-      loadImage(sample.searchUrl),
-    ]);
-    state.refImage = refImg;
-    state.searchImage = searchImg;
-    state.bbox =
-      sample.defaultBbox ??
-      (sample.useFullReference
-        ? [0, 0, refImg.naturalWidth, refImg.naturalHeight]
-        : null);
-    if (sample.threshold !== undefined) {
-      thresholdInput.value = String(sample.threshold);
-      thresholdValue.textContent = sample.threshold.toFixed(2);
-    }
-    drawRef();
-    drawSearch();
-    clearTemplate();
-    if (state.bbox) {
-      setTemplateBtn.disabled = false;
-      await handleSetTemplate();
-      await handleDetect();
-    } else {
-      setStatus("Preset loaded - draw a box on the reference image, then Set template.");
-    }
-  } catch (err) {
-    setStatus(`Preset load failed: ${(err as Error).message}`);
-  }
-}
 
 // Kick off model loading up front so the user doesn't wait on the first click.
-(async () => {
+const matcherReady = (async () => {
   try {
     setStatus("");
     backendLine.textContent = "Initialising jax-js...";
@@ -204,33 +126,14 @@ function loadFile(file: File, onImage: (img: HTMLImageElement) => void): void {
   img.src = URL.createObjectURL(file);
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Failed to load ${url}`));
-    img.src = url;
-  });
-}
-
-function drawRef(): void {
-  if (!state.refImage) return;
-  fitCanvas(refCanvas, state.refImage);
-  const ctx = refCanvas.getContext("2d");
+function drawImageCanvas(): void {
+  if (!state.image) return;
+  fitCanvas(imageCanvas, state.image);
+  const ctx = imageCanvas.getContext("2d");
   if (!ctx) return;
-  ctx.drawImage(state.refImage, 0, 0, refCanvas.width, refCanvas.height);
-  if (state.bbox) drawBboxOnCanvas(refCanvas, state.bbox, state.refImage);
-  setTemplateBtn.disabled = !state.bbox;
-}
-
-function drawSearch(): void {
-  if (!state.searchImage) return;
-  fitCanvas(searchCanvas, state.searchImage);
-  const ctx = searchCanvas.getContext("2d");
-  if (!ctx) return;
-  ctx.drawImage(state.searchImage, 0, 0, searchCanvas.width, searchCanvas.height);
-  detectBtn.disabled = !state.searchImage || !detector.templateEmbedding;
+  ctx.drawImage(state.image, 0, 0, imageCanvas.width, imageCanvas.height);
+  if (state.boxes.length > 0) drawDetections(state.boxes, state.scores);
+  if (state.bbox) strokeBbox(imageCanvas, state.bbox, "#facc15");
 }
 
 function fitCanvas(canvas: HTMLCanvasElement, img: HTMLImageElement): void {
@@ -241,46 +144,75 @@ function fitCanvas(canvas: HTMLCanvasElement, img: HTMLImageElement): void {
   canvas.dataset.ratio = ratio.toString();
 }
 
-function drawBboxOnCanvas(
+function strokeBbox(
   canvas: HTMLCanvasElement,
   bbox: Bbox,
-  img: HTMLImageElement,
+  color: string,
 ): void {
   const ratio = parseFloat(canvas.dataset.ratio || "1");
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   const [x1, y1, x2, y2] = bbox;
-  ctx.strokeStyle = "#22c55e";
+  ctx.save();
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.strokeRect(x1 * ratio, y1 * ratio, (x2 - x1) * ratio, (y2 - y1) * ratio);
+  ctx.restore();
 }
 
 function wireBboxSelection(): void {
   let dragStart: { x: number; y: number } | null = null;
-  refCanvas.addEventListener("mousedown", (e) => {
-    if (!state.refImage) return;
-    const { x, y } = toImageCoords(refCanvas, e);
+  let pointerId: number | null = null;
+
+  imageCanvas.addEventListener("pointerdown", (e) => {
+    if (!state.image) return;
+    pointerId = e.pointerId;
+    imageCanvas.setPointerCapture(e.pointerId);
+    const { x, y } = toImageCoords(imageCanvas, e);
     dragStart = { x, y };
+    detectionRunId++;
+    state.bbox = null;
+    state.boxes = [];
+    state.scores = [];
+    drawImageCanvas();
   });
-  refCanvas.addEventListener("mousemove", (e) => {
-    if (!dragStart || !state.refImage) return;
-    const { x, y } = toImageCoords(refCanvas, e);
-    const bbox: Bbox = [
-      Math.min(dragStart.x, x),
-      Math.min(dragStart.y, y),
-      Math.max(dragStart.x, x),
-      Math.max(dragStart.y, y),
-    ];
-    state.bbox = bbox;
-    drawBboxOnCanvas(refCanvas, bbox, state.refImage);
+
+  imageCanvas.addEventListener("pointermove", (e) => {
+    if (!dragStart || pointerId !== e.pointerId || !state.image) return;
+    updateDraggedBbox(e, dragStart);
+    drawImageCanvas();
   });
-  const finish = () => {
+
+  const finish = (e: PointerEvent) => {
+    if (!dragStart || pointerId !== e.pointerId) return;
+    updateDraggedBbox(e, dragStart);
     dragStart = null;
-    setTemplateBtn.disabled = !state.bbox;
+    pointerId = null;
+    if (imageCanvas.hasPointerCapture(e.pointerId)) {
+      imageCanvas.releasePointerCapture(e.pointerId);
+    }
+    if (!state.bbox || !isUsableBbox(state.bbox)) {
+      state.bbox = null;
+      drawImageCanvas();
+      setStatus("Draw a larger box around the object to match.");
+      return;
+    }
+    drawImageCanvas();
+    void handleDetect();
   };
-  refCanvas.addEventListener("mouseup", finish);
-  refCanvas.addEventListener("mouseleave", finish);
+  imageCanvas.addEventListener("pointerup", finish);
+  imageCanvas.addEventListener("pointercancel", finish);
+
+  function updateDraggedBbox(e: PointerEvent, start: { x: number; y: number }): void {
+    if (!state.image) return;
+    const { x, y } = toImageCoords(imageCanvas, e);
+    state.bbox = [
+      Math.min(start.x, x),
+      Math.min(start.y, y),
+      Math.max(start.x, x),
+      Math.max(start.y, y),
+    ];
+  }
 }
 
 function toImageCoords(canvas: HTMLCanvasElement, e: MouseEvent): {
@@ -289,76 +221,65 @@ function toImageCoords(canvas: HTMLCanvasElement, e: MouseEvent): {
 } {
   const rect = canvas.getBoundingClientRect();
   const ratio = parseFloat(canvas.dataset.ratio || "1");
+  const canvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const canvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const naturalW = canvas.width / ratio;
+  const naturalH = canvas.height / ratio;
   return {
-    x: (e.clientX - rect.left) / ratio,
-    y: (e.clientY - rect.top) / ratio,
+    x: clamp(canvasX / ratio, 0, naturalW),
+    y: clamp(canvasY / ratio, 0, naturalH),
   };
 }
 
-async function handleSetTemplate(): Promise<void> {
-  if (!state.refImage || !state.bbox) return;
-  setStatus("Running template branch...");
-  try {
-    const imageData = imageFromSource(state.refImage);
-    await detector.setTemplate(imageData, xyxyToCxcywh(state.bbox));
-    if (detector.templateImage) {
-      templateCanvas.width = detector.templateImage.width;
-      templateCanvas.height = detector.templateImage.height;
-      templateCanvas.getContext("2d")?.putImageData(detector.templateImage, 0, 0);
-    }
-    detectBtn.disabled = !state.searchImage;
-    setStatus("Template set.");
-  } catch (err) {
-    setStatus(`Template failed: ${(err as Error).message}`);
-  }
-}
-
 async function handleDetect(): Promise<void> {
-  if (!state.searchImage) return;
-  if (!detector.templateEmbedding) {
-    setStatus("Set a template first.");
-    return;
-  }
-  setStatus("Detecting...");
-  detectBtn.disabled = true;
+  if (!state.image || !state.bbox) return;
+  const runId = ++detectionRunId;
+  state.boxes = [];
+  state.scores = [];
+  drawImageCanvas();
+  setStatus("Preparing template and detecting...");
   try {
-    const imageData = imageFromSource(state.searchImage);
+    await matcherReady;
+    const imageData = imageFromSource(state.image);
+    await detector.setTemplate(imageData, xyxyToCxcywh(state.bbox));
+    if (runId !== detectionRunId) return;
     const t0 = performance.now();
     const { boxes, scores } = await detector.detect(imageData, {
-      threshold: parseFloat(thresholdInput.value),
-      pyramid: pyramidSelect.value.split(",").map((v) => parseFloat(v)),
+      threshold: DETECTION_THRESHOLD,
+      pyramid: DETECTION_PYRAMID,
     });
+    if (runId !== detectionRunId) return;
     const dt = performance.now() - t0;
-    drawDetections(boxes, scores);
+    state.boxes = boxes;
+    state.scores = scores;
+    drawImageCanvas();
     setStatus(`Found ${boxes.length} match(es) in ${dt.toFixed(0)} ms.`);
   } catch (err) {
     setStatus(`Detect failed: ${(err as Error).message}`);
-  } finally {
-    detectBtn.disabled = false;
   }
 }
 
 function drawDetections(boxes: Bbox[], scores: number[]): void {
-  if (!state.searchImage) return;
-  drawSearch();
-  const ratio = parseFloat(searchCanvas.dataset.ratio || "1");
+  const ratio = parseFloat(imageCanvas.dataset.ratio || "1");
   const scaled: Bbox[] = boxes.map(([x1, y1, x2, y2]) => [
     x1 * ratio,
     y1 * ratio,
     x2 * ratio,
     y2 * ratio,
   ]);
-  drawBoxes(searchCanvas, scaled, scores);
+  drawBoxes(imageCanvas, scaled, scores);
 }
 
 function xyxyToCxcywh([x1, y1, x2, y2]: Bbox): CxCyWh {
   return [(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1];
 }
 
-function clearTemplate(): void {
-  const ctx = templateCanvas.getContext("2d");
-  if (ctx) ctx.clearRect(0, 0, templateCanvas.width, templateCanvas.height);
-  detectBtn.disabled = true;
+function isUsableBbox([x1, y1, x2, y2]: Bbox): boolean {
+  return x2 - x1 >= 4 && y2 - y1 >= 4;
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
 }
 
 function imageFromSource(

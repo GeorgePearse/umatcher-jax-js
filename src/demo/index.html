@@ -23,71 +23,20 @@
 
     <!-- =================== DETECTION =================== -->
     <section id="detection-view" class="view active">
-      <section class="preset-bar">
-        <h3>Reference samples</h3>
-        <p class="help">
-          One-click presets with the same images the original UMatcher
-          reference implementation ships with. Default template ROIs match
-          the upstream defaults so results are directly comparable.
-        </p>
-        <div class="preset-grid" id="detectionPresets"></div>
-      </section>
-
-      <main class="split">
+      <main>
         <section class="panel">
-          <h2>1. Reference image + template box</h2>
+          <h2>Image + match box</h2>
           <p class="help">
             Drop or choose an image, then drag on it to select the object you
-            want to match.
+            want to match. Detection runs automatically and results are drawn
+            back onto the same image.
           </p>
-          <div class="dropzone" id="refDrop">
-            <input type="file" id="refFile" accept="image/*" hidden />
-            <span>Drop reference image or click to choose</span>
+          <div class="dropzone" id="imageDrop">
+            <input type="file" id="imageFile" accept="image/*" hidden />
+            <span>Drop image or click to choose</span>
           </div>
           <div class="canvas-wrap">
-            <canvas id="refCanvas"></canvas>
-          </div>
-          <div class="template-preview">
-            <span>Template crop:</span>
-            <canvas id="templateCanvas" width="128" height="128"></canvas>
-            <button id="setTemplateBtn" disabled>Set template</button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2>2. Search image</h2>
-          <p class="help">
-            Drop or choose the scene you want to search in, then hit Detect.
-          </p>
-          <div class="dropzone" id="searchDrop">
-            <input type="file" id="searchFile" accept="image/*" hidden />
-            <span>Drop search image or click to choose</span>
-          </div>
-          <div class="controls">
-            <label>
-              Threshold
-              <input
-                id="threshold"
-                type="range"
-                min="0.05"
-                max="0.95"
-                step="0.01"
-                value="0.3"
-              />
-              <span id="thresholdValue">0.30</span>
-            </label>
-            <label>
-              Pyramid
-              <select id="pyramid">
-                <option value="1.0">single-scale (1.0)</option>
-                <option value="0.7,1.0,1.3" selected>3 levels (0.7 / 1.0 / 1.3)</option>
-                <option value="0.5,0.7,1.0,1.3,1.7">5 levels</option>
-              </select>
-            </label>
-            <button id="detectBtn" disabled>Detect</button>
-          </div>
-          <div class="canvas-wrap">
-            <canvas id="searchCanvas"></canvas>
+            <canvas id="imageCanvas"></canvas>
           </div>
           <p id="status"></p>
         </section>

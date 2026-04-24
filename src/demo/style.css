@@ -212,23 +212,9 @@ canvas {
   max-width: 100%;
 }
 
-#refCanvas,
-#searchCanvas,
+#imageCanvas,
 #trackerCanvas {
   cursor: crosshair;
-}
-
-.template-preview {
-  margin-top: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.template-preview canvas {
-  border: 1px solid #1f2937;
-  border-radius: 4px;
-  background: #000;
 }
 
 .controls {
