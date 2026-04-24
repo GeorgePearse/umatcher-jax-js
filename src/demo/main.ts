@@ -32,6 +32,7 @@ let detectionRunId = 0;
 const DETECTION_THRESHOLD = 0.3;
 const DETECTION_PYRAMID = [1.0];
 const DETECTION_OVERLAP = 0;
+const DETECTION_MAX_SEARCH_SIDE = 512;
 
 // Model URLs are relative to the dev server's public root.
 const MODEL_BASE = "/models";
@@ -255,13 +256,16 @@ async function handleDetect(): Promise<void> {
       threshold: DETECTION_THRESHOLD,
       pyramid: DETECTION_PYRAMID,
       overlap: DETECTION_OVERLAP,
+      maxSearchSide: DETECTION_MAX_SEARCH_SIDE,
     });
     if (runId !== detectionRunId) return;
     const dt = performance.now() - t0;
     state.boxes = boxes;
     state.scores = scores;
     drawImageCanvas();
-    setStatus(`Found ${boxes.length} match(es) in ${dt.toFixed(0)} ms.`);
+    setStatus(
+      `Found ${boxes.length} match(es) in ${dt.toFixed(0)} ms using a ${DETECTION_MAX_SEARCH_SIDE}px fast search cap.`,
+    );
   } catch (err) {
     setStatus(`Detect failed: ${(err as Error).message}`);
   }

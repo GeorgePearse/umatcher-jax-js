@@ -18,6 +18,8 @@ export interface DetectOptions {
   threshold?: number;
   pyramid?: PyramidScales;
   overlap?: number;
+  /** Cap the largest scaled search-image side before windowing. Trades recall for speed. */
+  maxSearchSide?: number;
   /** IoU threshold for NMS. Defaults to 0.5 (matches the reference code). */
   nmsIou?: number;
 }
@@ -109,6 +111,7 @@ export class UDetector {
     const threshold = opts.threshold ?? 0.5;
     const pyramid = opts.pyramid ?? DEFAULT_PYRAMID;
     const overlap = opts.overlap ?? 0.5;
+    const maxSearchSide = opts.maxSearchSide ?? Infinity;
     const iouThreshold = opts.nmsIou ?? 0.5;
     const { searchSize } = this.matcher.cfg;
 
@@ -118,7 +121,10 @@ export class UDetector {
     const allScores: number[] = [];
 
     for (const baseScale of pyramid) {
-      const scale = this.scaleFactor * baseScale;
+      let scale = this.scaleFactor * baseScale;
+      if (Number.isFinite(maxSearchSide) && maxSearchSide > 0) {
+        scale = Math.min(scale, maxSearchSide / Math.max(originalW, originalH));
+      }
       let scaledW = Math.round(originalW * scale);
       let scaledH = Math.round(originalH * scale);
 
