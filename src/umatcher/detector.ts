@@ -4,7 +4,7 @@
  * semantics (center-cropped template, pyramid scales, NMS, thresholds).
  */
 
-import type { Bbox, PyramidScales } from "./types.js";
+import type { Bbox, CxCyWh, PyramidScales } from "./types.js";
 import { UMatcher } from "./matcher.js";
 import { centerCrop, imageDataToTensor, resize } from "./image.js";
 import { nms } from "./nms.js";
@@ -31,6 +31,7 @@ export class UDetector {
   scaleFactor = 1;
   /** The cropped template image, for display / debugging. */
   templateImage: ImageData | null = null;
+  private templateCount = 0;
 
   constructor(matcher: UMatcher) {
     this.matcher = matcher;
@@ -43,19 +44,55 @@ export class UDetector {
   /**
    * Set the template from a source image + bbox around the object.
    *
-   * `bbox` is [x1, y1, x2, y2] in pixels of the source image. This mirrors
+   * `bbox` is [cx, cy, w, h] in pixels of the source image. This mirrors
    * the reference `set_template`: center-crop a square region around the
    * bbox (scaled by templateScale), resize it to templateSize, run the
    * template branch, and store the L2-normalised embedding.
    */
-  async setTemplate(image: ImageData, bbox: Bbox): Promise<void> {
+  async setTemplate(image: ImageData, bbox: CxCyWh): Promise<void> {
+    this.templateEmbedding = null;
+    this.templateCount = 0;
+    await this.addTemplate(image, bbox);
+  }
+
+  /**
+   * Add another template view and average it with the existing embedding.
+   * This implements the upstream few-shot recommendation: extract multiple
+   * template embeddings, sum them, then normalise back to unit length.
+   */
+  async addTemplate(image: ImageData, bbox: CxCyWh): Promise<void> {
     const { templateSize, templateScale } = this.matcher.cfg;
     const cropped = centerCrop(image, bbox, templateScale);
-    this.scaleFactor = templateSize / cropped.width;
+    const cropScaleFactor = templateSize / cropped.width;
     const resized = resize(cropped, templateSize, templateSize);
     this.templateImage = resized;
     const tensor = imageDataToTensor(resized);
-    this.templateEmbedding = await this.matcher.embedTemplate(tensor);
+    const embedding = await this.matcher.embedTemplate(tensor);
+    this.templateEmbedding = this.templateEmbedding
+      ? normalizeSum(this.templateEmbedding, embedding)
+      : embedding;
+    this.scaleFactor =
+      this.templateCount === 0
+        ? cropScaleFactor
+        : (this.scaleFactor * this.templateCount + cropScaleFactor) /
+          (this.templateCount + 1);
+    this.templateCount++;
+  }
+
+  /** Use a precomputed template embedding, useful for classification/few-shot UIs. */
+  setTemplateEmbedding(embedding: Float32Array): void {
+    const expected = this.matcher.cfg.embeddingDim;
+    if (embedding.length !== expected) {
+      throw new Error(
+        `Template embedding has wrong length: expected ${expected}, got ${embedding.length}`,
+      );
+    }
+    this.templateEmbedding = l2Normalize(embedding);
+    this.templateCount = 1;
+  }
+
+  getTemplateEmbedding(): Float32Array | null {
+    return this.templateEmbedding ? new Float32Array(this.templateEmbedding) : null;
   }
 
   /**
@@ -147,6 +184,24 @@ export class UDetector {
     const out = await this.matcher.runSearch(tensor, this.templateEmbedding);
     return decodeHeatmap(out, searchSize, this.featSz, this.matcher.cfg.stride, 0.1);
   }
+}
+
+function normalizeSum(a: Float32Array, b: Float32Array): Float32Array {
+  if (a.length !== b.length) {
+    throw new Error(`Embedding length mismatch: ${a.length} vs ${b.length}`);
+  }
+  const out = new Float32Array(a.length);
+  for (let i = 0; i < out.length; i++) out[i] = a[i] + b[i];
+  return l2Normalize(out);
+}
+
+function l2Normalize(v: Float32Array): Float32Array {
+  let sum = 0;
+  for (let i = 0; i < v.length; i++) sum += v[i] * v[i];
+  const norm = Math.sqrt(sum) + 1e-12;
+  const out = new Float32Array(v.length);
+  for (let i = 0; i < v.length; i++) out[i] = v[i] / norm;
+  return out;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

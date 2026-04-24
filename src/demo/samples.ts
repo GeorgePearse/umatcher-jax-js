@@ -18,6 +18,8 @@ export interface DetectionSample {
    * Null means "let the user draw it".
    */
   defaultBbox: Bbox | null;
+  /** Use the full reference image as the template when no explicit bbox is set. */
+  useFullReference?: boolean;
   /** Search image to run detection on. */
   searchUrl: string;
   /** Default detection threshold to use for this preset. */
@@ -68,8 +70,8 @@ export const DETECTION_SAMPLES: DetectionSample[] = [
     description:
       "One-shot detection: template_3.png is the isolated template (use the whole image), test_3.png is the scene. Tests cross-image matching.",
     referenceUrl: "/samples/template_3.png",
-    // Use the full image as the template by default - user can tighten it if they want.
     defaultBbox: null,
+    useFullReference: true,
     searchUrl: "/samples/test_3.png",
     threshold: 0.35,
   },

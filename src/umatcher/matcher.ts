@@ -114,8 +114,14 @@ export class UMatcher {
     const outputs = model.run({ template_img: input });
     const emb = firstOutput(outputs);
     const data = await emb.data();
+    const values = toFloat32(data);
+    if (values.length < embeddingDim) {
+      throw new Error(
+        `Template embedding output is too small: expected ${embeddingDim}, got ${values.length}`,
+      );
+    }
     // L2 normalise to match the reference detector's behaviour.
-    return l2Normalize(new Float32Array(data.buffer, data.byteOffset, embeddingDim));
+    return l2Normalize(values.length === embeddingDim ? values : values.slice(0, embeddingDim));
   }
 
   /**
@@ -226,14 +232,24 @@ function findOutput(
 
 function toFloat32(data: ArrayBufferView): Float32Array {
   if (data instanceof Float32Array) return data;
-  // jax-js returns TypedArrays; for fp16 we'd need conversion, but the exported
-  // umatcher ONNX is fp32 by default. If the model is fp16 the user should
-  // rebuild with --half=false, or we'd cast here.
-  return new Float32Array(
-    data.buffer as ArrayBuffer,
-    data.byteOffset,
-    data.byteLength / 4,
-  );
+  if (data.constructor.name === "Float16Array") {
+    return Float32Array.from(data as unknown as ArrayLike<number>);
+  }
+  if (data instanceof Uint16Array) {
+    const out = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = float16ToFloat32(data[i]);
+    return out;
+  }
+  return Float32Array.from(data as unknown as ArrayLike<number>);
+}
+
+function float16ToFloat32(bits: number): number {
+  const sign = (bits & 0x8000) ? -1 : 1;
+  const exp = (bits >> 10) & 0x1f;
+  const frac = bits & 0x03ff;
+  if (exp === 0) return sign * Math.pow(2, -14) * (frac / 0x400);
+  if (exp === 0x1f) return frac ? NaN : sign * Infinity;
+  return sign * Math.pow(2, exp - 15) * (1 + frac / 0x400);
 }
 
 function l2Normalize(v: Float32Array): Float32Array {

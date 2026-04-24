@@ -7,7 +7,7 @@ no backend, no Python anywhere in the pipeline: templates, images, frames,
 and model weights stay on the user's device, and inference runs on WebGPU
 (with a Wasm fallback) via jax-js.
 
-- **What**: detector + tracker + image preprocessing + NMS, all in TypeScript.
+- **What**: detector + tracker + embedding classifier + image preprocessing + NMS, all in TypeScript.
 - **Where does inference happen?** In your browser.
 - **Setup**: `npm install && npm run dev`. Model weights are committed in
   `public/models/` so the demo works immediately.
@@ -20,6 +20,7 @@ src/
     matcher.ts     # ONNX model wrapper (template & search branches)
     detector.ts    # Pyramid sliding-window detector
     tracker.ts     # Single-object tracker
+    classifier.ts  # kNN classifier over template embeddings
     image.ts       # center_crop / resize / tensor helpers
     nms.ts         # Greedy NMS
     types.ts       # Shared types and defaults
@@ -62,6 +63,7 @@ output is directly comparable.
 ```ts
 import {
   buildUMatcher,
+  UClassifier,
   UDetector,
   UTracker,
 } from "umatcher-jax-js";
@@ -74,11 +76,13 @@ await matcher.load();
 
 // --- Detection ---
 const detector = new UDetector(matcher);
-await detector.setTemplate(refImageData, [x1, y1, x2, y2]);
+await detector.setTemplate(refImageData, [cx, cy, w, h]); // upstream cxcywh ROI
+await detector.addTemplate(secondRefImageData, [cx2, cy2, w2, h2]); // optional few-shot averaging
 const { boxes, scores } = await detector.detect(searchImageData, {
   threshold: 0.3,
   pyramid: [0.7, 1.0, 1.3],
 });
+// boxes are returned as [x1, y1, x2, y2]
 
 // --- Single-object tracking ---
 const tracker = new UTracker(matcher);
@@ -87,14 +91,19 @@ for await (const frame of frames) {
   const { pos, score } = await tracker.track(frame);
   if (score > 0) drawBox(frame, pos);
 }
+
+// --- Classification from template embeddings ---
+const classifier = new UClassifier(matcher);
+await classifier.addTemplate("bolt", labeledImageData, [cx, cy, w, h]);
+const result = await classifier.classifyTemplate(queryImageData, [cx, cy, w, h], 3);
 ```
 
 ## Why ONNX?
 
 jax-js ships `@jax-js/onnx` which lowers ONNX graphs onto its WebGPU/Wasm
-compiler. Using it as the model format keeps this port compact (<1k LOC)
-and preserves bit-level agreement with the reference implementation: we
-only reimplement the pre/post processing in TypeScript.
+compiler. Using it as the model format keeps this port compact and keeps the
+learned model identical to the reference implementation: we only reimplement
+the pre/post processing in TypeScript.
 
 ## Runtime dependencies
 

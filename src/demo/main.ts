@@ -135,7 +135,11 @@ async function loadDetectionPreset(sample: DetectionSample): Promise<void> {
     ]);
     state.refImage = refImg;
     state.searchImage = searchImg;
-    state.bbox = sample.defaultBbox;
+    state.bbox =
+      sample.defaultBbox ??
+      (sample.useFullReference
+        ? [0, 0, refImg.naturalWidth, refImg.naturalHeight]
+        : null);
     if (sample.threshold !== undefined) {
       thresholdInput.value = String(sample.threshold);
       thresholdValue.textContent = sample.threshold.toFixed(2);
@@ -296,7 +300,7 @@ async function handleSetTemplate(): Promise<void> {
   setStatus("Running template branch...");
   try {
     const imageData = imageFromSource(state.refImage);
-    await detector.setTemplate(imageData, state.bbox);
+    await detector.setTemplate(imageData, xyxyToCxcywh(state.bbox));
     if (detector.templateImage) {
       templateCanvas.width = detector.templateImage.width;
       templateCanvas.height = detector.templateImage.height;
@@ -345,6 +349,10 @@ function drawDetections(boxes: Bbox[], scores: number[]): void {
     y2 * ratio,
   ]);
   drawBoxes(searchCanvas, scaled, scores);
+}
+
+function xyxyToCxcywh([x1, y1, x2, y2]: Bbox): CxCyWh {
+  return [(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1];
 }
 
 function clearTemplate(): void {

@@ -6,7 +6,7 @@
  * HTMLImageElement / HTMLVideoElement / Canvas to tensor-ready Float32.
  */
 
-import type { Bbox } from "./types.js";
+import type { Bbox, CxCyWh } from "./types.js";
 
 /**
  * Convert any browser image source into an ImageData at its native resolution.
@@ -47,40 +47,47 @@ export function imageDataToTensor(img: ImageData): Float32Array {
 /**
  * Center-crop a region around a bbox, mirroring the reference `center_crop`.
  *
- * The bbox is in [x1, y1, x2, y2] form. The crop is a square whose side length
- * equals `max(w, h) * scale`, centered on the bbox center. Regions outside the
- * source image are padded with zeros (black).
+ * The bbox is in upstream UMatcher's [cx, cy, w, h] form. The crop is a square
+ * whose side length equals `sqrt(w * h) * scale`, centered on the bbox center.
+ * Regions outside the source image are padded with replicated edge pixels, as
+ * OpenCV's `BORDER_REPLICATE` does in the Python and C++ demos.
  */
-export function centerCrop(img: ImageData, bbox: Bbox, scale: number): ImageData {
+export function centerCrop(img: ImageData, bbox: CxCyWh, scale: number): ImageData {
+  const [rawCx, rawCy, rawW, rawH] = bbox;
+  const cx = Math.trunc(rawCx);
+  const cy = Math.trunc(rawCy);
+  const bw = Math.max(1, Math.trunc(rawW));
+  const bh = Math.max(1, Math.trunc(rawH));
+  const size = Math.max(1, Math.trunc(Math.sqrt(bw * bh) * scale));
+  const x1 = cx - Math.floor(size / 2);
+  const y1 = cy - Math.floor(size / 2);
+
+  const out = new ImageData(size, size);
+  const src = img.data;
+  const dst = out.data;
+  const srcW = img.width;
+  const srcH = img.height;
+
+  for (let oy = 0; oy < size; oy++) {
+    const sy = clampInt(y1 + oy, 0, srcH - 1);
+    for (let ox = 0; ox < size; ox++) {
+      const sx = clampInt(x1 + ox, 0, srcW - 1);
+      const si = (sy * srcW + sx) * 4;
+      const di = (oy * size + ox) * 4;
+      dst[di] = src[si];
+      dst[di + 1] = src[si + 1];
+      dst[di + 2] = src[si + 2];
+      dst[di + 3] = src[si + 3];
+    }
+  }
+
+  return out;
+}
+
+/** Convenience wrapper for callers that have a corner-format [x1, y1, x2, y2]. */
+export function centerCropBbox(img: ImageData, bbox: Bbox, scale: number): ImageData {
   const [x1, y1, x2, y2] = bbox;
-  const cx = (x1 + x2) / 2;
-  const cy = (y1 + y2) / 2;
-  const side = Math.max(x2 - x1, y2 - y1) * scale;
-  const half = side / 2;
-
-  const size = Math.max(1, Math.round(side));
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not acquire 2D canvas context");
-
-  // Put the source image onto a temp canvas so we can draw a region out of it.
-  const srcCanvas = document.createElement("canvas");
-  srcCanvas.width = img.width;
-  srcCanvas.height = img.height;
-  const srcCtx = srcCanvas.getContext("2d");
-  if (!srcCtx) throw new Error("Could not acquire 2D canvas context");
-  srcCtx.putImageData(img, 0, 0);
-
-  const sx = cx - half;
-  const sy = cy - half;
-  // drawImage gracefully clips when coords are out of bounds, leaving zero alpha.
-  // We fill black first so the padding is RGB=(0,0,0) rather than transparent.
-  ctx.fillStyle = "rgb(0,0,0)";
-  ctx.fillRect(0, 0, size, size);
-  ctx.drawImage(srcCanvas, sx, sy, side, side, 0, 0, size, size);
-  return ctx.getImageData(0, 0, size, size);
+  return centerCrop(img, [(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], scale);
 }
 
 /** Resize an ImageData using the browser's native bilinear filter. */
@@ -128,4 +135,8 @@ export function drawBoxes(
     }
   }
   ctx.restore();
+}
+
+function clampInt(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
 }

@@ -9,9 +9,15 @@ export { UMatcher, buildUMatcher } from "./matcher.js";
 export { UDetector, type DetectionResult } from "./detector.js";
 export { UTracker, type TrackResult } from "./tracker.js";
 export {
+  UClassifier,
+  type ClassificationNeighbor,
+  type ClassificationResult,
+} from "./classifier.js";
+export {
   imageDataFromImage,
   imageDataToTensor,
   centerCrop,
+  centerCropBbox,
   resize,
   drawBoxes,
 } from "./image.js";
